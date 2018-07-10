@@ -87,7 +87,8 @@ else
       || continue
     fi
 
-    sh -- "$temp_dir/get-docker.sh" || continue
+    chmod +x -- "$temp_dir/get-docker.sh"
+    "$temp_dir/get-docker.sh" || continue
 
     case ":$(id -u): $(groups) " in
     (:0:*|*" docker "*) break ;;
