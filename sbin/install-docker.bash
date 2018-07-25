@@ -23,6 +23,18 @@ fi
 set -eufo pipefail +x || set -euf +x
 [[ ${DEBUG-} != true ]] || set -x
 
+
+if command -v curl >/dev/null; then
+  cat_url() { [[ ${1-} ]] && curl -fsSL ${2:+-o "$2"} "$1"; }
+elif command -v wget >/dev/null; then
+  cat_url() { [[ ${1-} ]] && wget -qO "${2:--}" "$1"; }
+else
+  cat_url() {
+    echo "[WARN] no wget or curl, cannot download $curl !" >&2
+    return 1
+  }
+fi
+
 if [[ ${OSTYPE-} == darwin* ]]; then
   __detect_brew=1
   while ! command -v brew &>/dev/null && (( --__detect_brew >= 0 )); do
@@ -63,9 +75,9 @@ else
 
     rm -- "$temp_dir/get-docker.sh" &>/dev/null || :
 
-    if curl -fsSL https://get.docker.com/ -o "$temp_dir/get-docker.sh"; then
+    if cat_url https://get.docker.com/ "$temp_dir/get-docker.sh"; then
       __SKIP_CHECK_DOCKER_INSTALLER=true
-    elif curl -fsSL get.docker.com -o "$temp_dir/get-docker.sh"; then
+    elif cat_url get.docker.com "$temp_dir/get-docker.sh"; then
       __SKIP_CHECK_DOCKER_INSTALLER="${SKIP_CHECK_DOCKER_INSTALLER-}"
     else
       continue
@@ -76,7 +88,7 @@ else
       SCRIPT_COMMIT_SHA=${SCRIPT_COMMIT_SHA##*=}
       [[ $SCRIPT_COMMIT_SHA ]] || continue
 
-      curl -fsSL "https://raw.githubusercontent.com/docker/docker-install/$SCRIPT_COMMIT_SHA/install.sh" -o "$temp_dir/github-source.sh" \
+      cat_url "https://raw.githubusercontent.com/docker/docker-install/$SCRIPT_COMMIT_SHA/install.sh" "$temp_dir/github-source.sh" \
       || continue
 
       SCRIPT_COMMIT_CHKSUM=$(grep -v "^SCRIPT_COMMIT_SHA=" -- "$temp_dir/github-source.sh" | grep -v "^DEFAULT_CHANNEL_VALUE=" | sha1sum)
