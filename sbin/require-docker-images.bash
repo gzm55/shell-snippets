@@ -33,7 +33,7 @@ fi
 ## PULL images
 
 for image in "$@"; do
-  if [[ $FORCE_PULL == true ]] || ! docker images -q "$image" 2>/dev/null | grep -q "^[0-9a-zA-Z]*$"; then
+  if [[ ${FORCE_PULL-} == true ]] || ! docker images -q "$image" 2>/dev/null | grep -q "^[0-9a-zA-Z]*$"; then
     echo "[INFO] start deploying $image..."
     docker pull "$image"
   fi
