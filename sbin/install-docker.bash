@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+## Usage:
+# - Linux: [DOCKER_RUNNERS=username[,username...]] install-docker.bash [--mirror <MIRROR-NAME>] [--dry-run] 
+# - Macos: install-docker.bash
+# - Windows: DO NOT SUPPORT
+
 # detect bash, see: https://www.av8n.com/computer/shell-dialect-detect
 # shellcheck disable=SC2006,SC2116
 /usr/bin/env test _"`echo asdf 2>/dev/null`" != _asdf \
@@ -22,7 +27,6 @@ fi
 
 set -eufo pipefail +x || set -euf +x
 [[ ${DEBUG-} != true ]] || set -x
-
 
 if command -v curl >/dev/null; then
   cat_url() { [[ ${1-} ]] && curl -fsSL ${2:+-o "$2"} "$1"; }
@@ -74,38 +78,13 @@ else
     fi
 
     rm -- "$temp_dir/get-docker.sh" &>/dev/null || :
-
-    if cat_url https://get.docker.com/ "$temp_dir/get-docker.sh"; then
-      __SKIP_CHECK_DOCKER_INSTALLER=true
-    elif cat_url get.docker.com "$temp_dir/get-docker.sh"; then
-      __SKIP_CHECK_DOCKER_INSTALLER="${SKIP_CHECK_DOCKER_INSTALLER-}"
-    else
-      continue
-    fi
-
-    if [[ $__SKIP_CHECK_DOCKER_INSTALLER != true ]]; then
-      SCRIPT_COMMIT_SHA=$(grep -m 1 "^SCRIPT_COMMIT_SHA=" -- "$temp_dir/get-docker.sh")
-      SCRIPT_COMMIT_SHA=${SCRIPT_COMMIT_SHA##*=}
-      [[ $SCRIPT_COMMIT_SHA ]] || continue
-
-      cat_url "https://raw.githubusercontent.com/docker/docker-install/$SCRIPT_COMMIT_SHA/install.sh" "$temp_dir/github-source.sh" \
-      || continue
-
-      SCRIPT_COMMIT_CHKSUM=$(grep -v "^SCRIPT_COMMIT_SHA=" -- "$temp_dir/github-source.sh" | grep -v "^DEFAULT_CHANNEL_VALUE=" | sha1sum)
-      SCRIPT_COMMIT_CHKSUM=${SCRIPT_COMMIT_CHKSUM%% *}
-      [[ $SCRIPT_COMMIT_CHKSUM ]] || continue
-
-      sha1sum -c - <<< "$SCRIPT_COMMIT_CHKSUM  "<(grep -v "^SCRIPT_COMMIT_SHA=" -- "$temp_dir/get-docker.sh" | grep -v "^DEFAULT_CHANNEL_VALUE=") \
-      || continue
-    fi
+    cat_url https://get.docker.com/ "$temp_dir/get-docker.sh" \
+    || cat_url "https://raw.githubusercontent.com/docker/docker-install/master/install.sh" "$temp_dir/get-docker.sh" \
+    || { echo "[ERROR] download installer fail!" >&2; continue; }
 
     chmod +x -- "$temp_dir/get-docker.sh"
-    "$temp_dir/get-docker.sh" || continue
-
-    case ":$(id -u): $(groups) " in
-    (:0:*|*" docker "*) break ;;
-    (*) sudo usermod -aG docker "$(whoami)" ;;
-    esac
+    "$temp_dir/get-docker.sh" "$@" \
+    || { echo "[ERROR] fail to install docker!" >&2; continue; }
   done
 
   [[ $temp_dir != /tmp/* || ! -d "$temp_dir" ]] || rm -rf "$temp_dir" || :
@@ -116,4 +95,13 @@ else
       ;;
   esac
   unset __detect_docker
+
+  for __user in ${DOCKER_RUNNERS//,/ }; do
+    case ":$(id -u $__user): $(groups $__user) " in
+    (:0:*|*" docker "*) break ;;
+    (*) sudo usermod -aG docker $__user;;
+    esac
+  done
+
+  unset __user
 fi
